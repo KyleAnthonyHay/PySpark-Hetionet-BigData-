@@ -35,29 +35,36 @@ result = drugs_df.join(filtered_edges, drugs_df["id"] == filtered_edges["source"
 sorted_result = result.orderBy("Number_of_Genes", ascending=False)
 sorted_result.show(5)  # Display the top 5 results
 
-
 # -------------- Display the result Quesiton 2 --------------
-# Filter edges to get only those that are disease-related (assuming that 'Disease::' prefix is used for disease-related edges)
-disease_edges = edges.filter(edges["target"].startswith("Disease::"))
 
-# Count how many drugs are associated with each disease
-disease_drug_count = disease_edges.groupBy("target") \
-                                  .agg(count("source").alias("num_drugs"))
+# Filter edges for relationships where compounds are associated with diseases
+compound_disease_edges = edges.filter(
+    # This may need to be adjusted based on your actual metaedge codes
+    edges["metaedge"] == "CtD"
+)
 
-# Now count how many diseases have the same number of associated drugs
-disease_count_per_drug_number = disease_drug_count.groupBy("num_drugs") \
-                                                  .agg(count("target").alias("num_diseases"))
+# Group by the compound and count the number of diseases
+compound_disease_count = compound_disease_edges.groupBy("source") \
+                                               .agg(count("target").alias("Number_of_Diseases"))
 
-# Get the top 5 disease counts in descending order
-top_disease_counts = disease_count_per_drug_number.orderBy(
-    desc("num_diseases")).limit(5)
+# Order by the count of diseases and take the top 5
+top_compounds = compound_disease_count.orderBy(
+    col("Number_of_Diseases").desc()).limit(5)
 
 # Show the results
-top_disease_counts.show()
+top_compounds.show()
 
 # -------------- Display the result Quesiton 3 --------------
-top_drugs = sorted_result.orderBy("Number_of_Genes", ascending=False).limit(5)
-top_drugs.select("id").show()
+result2 = drugs_df.join(filtered_edges, drugs_df["id"] == filtered_edges["source"], "left_outer") \
+    .groupBy(drugs_df["name"]) \
+    .agg(
+    count(when(filtered_edges.target.startswith(
+        "Gene::"), 1)).alias("Number_of_Genes"),
+    count(when(filtered_edges.target.startswith("Disease::"), 1)).alias(
+        "Number_of_Diseases")
+)
+top_drugs = result2.orderBy("Number_of_Genes", ascending=False).limit(5)
+top_drugs.select("name").show()
 
 
 spark.stop()  # Stop the Spark session
